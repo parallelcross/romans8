@@ -13,10 +13,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = db.prepare(`SELECT translation FROM users WHERE id = ?`).get(userId) as { translation: string } | undefined;
+    const result = await db.execute({
+      sql: `SELECT translation FROM users WHERE id = ?`,
+      args: [userId]
+    });
+    const user = result.rows[0] as unknown as { translation: string } | undefined;
     const translation = user?.translation || 'csb';
 
-    const session = generateDailySession(userId, translation);
+    const session = await generateDailySession(userId, translation);
     return NextResponse.json({ ...session, translation });
   } catch (error) {
     console.error('Error generating session:', error);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import db from '@/lib/db';
 import { getUserFromCookie } from '@/lib/auth';
+import { isValidOrigin, isValidTranslation } from '@/lib/security';
 
 export async function GET() {
   try {
@@ -12,9 +13,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = db.prepare(`
-      SELECT id, name, translation, created_at FROM users WHERE id = ?
-    `).get(userId) as { id: string; name: string | null; translation: string; created_at: string } | undefined;
+    const result = await db.execute({
+      sql: `SELECT id, name, translation, created_at FROM users WHERE id = ?`,
+      args: [userId]
+    });
+    const user = result.rows[0] as unknown as { id: string; name: string | null; translation: string; created_at: string } | undefined;
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -29,6 +32,10 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
+    if (!isValidOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
+    }
+
     const cookieStore = await cookies();
     const userId = getUserFromCookie(cookieStore);
 
@@ -37,19 +44,24 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { translation } = body;
+    const { translation } = body ?? {};
 
-    if (translation && !['csb', 'esv'].includes(translation)) {
+    if (translation !== undefined && !isValidTranslation(translation)) {
       return NextResponse.json({ error: 'Invalid translation' }, { status: 400 });
     }
 
     if (translation) {
-      db.prepare(`UPDATE users SET translation = ? WHERE id = ?`).run(translation, userId);
+      await db.execute({
+        sql: `UPDATE users SET translation = ? WHERE id = ?`,
+        args: [translation, userId]
+      });
     }
 
-    const user = db.prepare(`
-      SELECT id, name, translation, created_at FROM users WHERE id = ?
-    `).get(userId) as { id: string; name: string | null; translation: string; created_at: string } | undefined;
+    const result = await db.execute({
+      sql: `SELECT id, name, translation, created_at FROM users WHERE id = ?`,
+      args: [userId]
+    });
+    const user = result.rows[0] as unknown as { id: string; name: string | null; translation: string; created_at: string } | undefined;
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

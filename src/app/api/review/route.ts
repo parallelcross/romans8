@@ -9,16 +9,20 @@ import {
   createInitialState,
 } from '@/lib/spaced-repetition';
 import { getUserFromCookie } from '@/lib/auth';
-
-interface ReviewRequest {
-  phraseId: number;
-  inputText: string;
-  selfRating: QualityRating;
-  durationMs: number;
-}
+import {
+  isValidOrigin,
+  isValidPhraseId,
+  isValidInputText,
+  isValidRating,
+  isValidDuration,
+} from '@/lib/security';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isValidOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
+    }
+
     const cookieStore = await cookies();
     const userId = getUserFromCookie(cookieStore);
 
@@ -26,12 +30,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body: ReviewRequest = await request.json();
-    const { phraseId, inputText, selfRating, durationMs } = body;
+    const body = await request.json();
+    const { phraseId, inputText, selfRating, durationMs } = body ?? {};
 
-    const phrase = db.prepare(`
-      SELECT phrase_text FROM phrases WHERE id = ?
-    `).get(phraseId) as { phrase_text: string } | undefined;
+    if (!isValidPhraseId(phraseId)) {
+      return NextResponse.json({ error: 'Invalid phraseId' }, { status: 400 });
+    }
+
+    if (!isValidInputText(inputText)) {
+      return NextResponse.json({ error: 'Invalid inputText' }, { status: 400 });
+    }
+
+    if (!isValidRating(selfRating)) {
+      return NextResponse.json({ error: 'Invalid selfRating' }, { status: 400 });
+    }
+
+    if (!isValidDuration(durationMs)) {
+      return NextResponse.json({ error: 'Invalid duration' }, { status: 400 });
+    }
+
+    const phraseResult = await db.execute({
+      sql: `SELECT phrase_text FROM phrases WHERE id = ?`,
+      args: [phraseId]
+    });
+    const phrase = phraseResult.rows[0] as unknown as { phrase_text: string } | undefined;
 
     if (!phrase) {
       return NextResponse.json({ error: 'Phrase not found' }, { status: 404 });
@@ -40,11 +62,13 @@ export async function POST(request: NextRequest) {
     const scoreResult = calculateScore(inputText, phrase.phrase_text);
     const passed = scoreResult.score >= THRESHOLDS.PASS;
 
-    let progress = db.prepare(`
-      SELECT ease_factor, interval_days, repetitions, lapses, mastery_level
-      FROM phrase_progress
-      WHERE user_id = ? AND phrase_id = ?
-    `).get(userId, phraseId) as {
+    const progressResult = await db.execute({
+      sql: `SELECT ease_factor, interval_days, repetitions, lapses, mastery_level
+            FROM phrase_progress
+            WHERE user_id = ? AND phrase_id = ?`,
+      args: [userId, phraseId]
+    });
+    const progress = progressResult.rows[0] as unknown as {
       ease_factor: number;
       interval_days: number;
       repetitions: number;
@@ -53,7 +77,7 @@ export async function POST(request: NextRequest) {
     } | undefined;
 
     const currentState = progress ?? createInitialState();
-    const quality = mapScoreToQuality(scoreResult.score, selfRating);
+    const quality = mapScoreToQuality(scoreResult.score, selfRating as QualityRating);
     const nextReview = calculateNextReview(currentState, quality);
 
     let newMasteryLevel = progress?.mastery_level ?? 0;
@@ -64,52 +88,55 @@ export async function POST(request: NextRequest) {
     }
 
     if (progress) {
-      db.prepare(`
-        UPDATE phrase_progress
-        SET ease_factor = ?, interval_days = ?, due_date = ?, repetitions = ?, lapses = ?, mastery_level = ?
-        WHERE user_id = ? AND phrase_id = ?
-      `).run(
-        nextReview.ease_factor,
-        nextReview.interval_days,
-        nextReview.due_date,
-        nextReview.repetitions,
-        nextReview.lapses,
-        newMasteryLevel,
-        userId,
-        phraseId
-      );
+      await db.execute({
+        sql: `UPDATE phrase_progress
+              SET ease_factor = ?, interval_days = ?, due_date = ?, repetitions = ?, lapses = ?, mastery_level = ?
+              WHERE user_id = ? AND phrase_id = ?`,
+        args: [
+          nextReview.ease_factor,
+          nextReview.interval_days,
+          nextReview.due_date,
+          nextReview.repetitions,
+          nextReview.lapses,
+          newMasteryLevel,
+          userId,
+          phraseId
+        ]
+      });
     } else {
-      db.prepare(`
-        INSERT INTO phrase_progress (user_id, phrase_id, ease_factor, interval_days, due_date, repetitions, lapses, mastery_level)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        userId,
-        phraseId,
-        nextReview.ease_factor,
-        nextReview.interval_days,
-        nextReview.due_date,
-        nextReview.repetitions,
-        nextReview.lapses,
-        newMasteryLevel
-      );
+      await db.execute({
+        sql: `INSERT INTO phrase_progress (user_id, phrase_id, ease_factor, interval_days, due_date, repetitions, lapses, mastery_level)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          userId,
+          phraseId,
+          nextReview.ease_factor,
+          nextReview.interval_days,
+          nextReview.due_date,
+          nextReview.repetitions,
+          nextReview.lapses,
+          newMasteryLevel
+        ]
+      });
     }
 
     const hintLevel = newMasteryLevel >= 5 ? 3 : newMasteryLevel >= 3 ? 2 : newMasteryLevel >= 1 ? 1 : 0;
 
-    db.prepare(`
-      INSERT INTO practice_events (user_id, phrase_id, event_type, hint_level, input_text, score, self_rating, duration_ms, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      userId,
-      phraseId,
-      'review',
-      hintLevel,
-      inputText,
-      scoreResult.score,
-      selfRating,
-      durationMs,
-      new Date().toISOString()
-    );
+    await db.execute({
+      sql: `INSERT INTO practice_events (user_id, phrase_id, event_type, hint_level, input_text, score, self_rating, duration_ms, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        userId,
+        phraseId,
+        'review',
+        hintLevel,
+        inputText,
+        scoreResult.score,
+        selfRating,
+        durationMs,
+        new Date().toISOString()
+      ]
+    });
 
     return NextResponse.json({
       score: scoreResult.score,

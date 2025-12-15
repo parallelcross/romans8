@@ -21,18 +21,20 @@ function masteryToHintLevel(masteryLevel: number): HintLevel {
   return 0;
 }
 
-export function generateDailySession(userId: string, translation: string = 'csb'): DailySession {
+export async function generateDailySession(userId: string, translation: string = 'csb'): Promise<DailySession> {
   const today = new Date().toISOString().split('T')[0];
 
-  const masteredPhrases = db.prepare(`
-    SELECT p.id, p.phrase_text, v.verse_number, pp.mastery_level
-    FROM phrases p
-    JOIN verses v ON p.verse_id = v.id
-    JOIN phrase_progress pp ON pp.phrase_id = p.id AND pp.user_id = ?
-    WHERE pp.mastery_level >= 3 AND v.translation = ?
-    ORDER BY RANDOM()
-    LIMIT 3
-  `).all(userId, translation) as Array<{ id: number; phrase_text: string; verse_number: number; mastery_level: number }>;
+  const masteredResult = await db.execute({
+    sql: `SELECT p.id, p.phrase_text, v.verse_number, pp.mastery_level
+          FROM phrases p
+          JOIN verses v ON p.verse_id = v.id
+          JOIN phrase_progress pp ON pp.phrase_id = p.id AND pp.user_id = ?
+          WHERE pp.mastery_level >= 3 AND v.translation = ?
+          ORDER BY RANDOM()
+          LIMIT 3`,
+    args: [userId, translation]
+  });
+  const masteredPhrases = masteredResult.rows as unknown as Array<{ id: number; phrase_text: string; verse_number: number; mastery_level: number }>;
 
   const warmup: SessionPhrase[] = masteredPhrases.map(p => ({
     id: p.id,
@@ -41,14 +43,16 @@ export function generateDailySession(userId: string, translation: string = 'csb'
     hint_level: masteryToHintLevel(p.mastery_level),
   }));
 
-  const reviewPhrases = db.prepare(`
-    SELECT p.id, p.phrase_text, v.verse_number, pp.mastery_level
-    FROM phrases p
-    JOIN verses v ON p.verse_id = v.id
-    JOIN phrase_progress pp ON pp.phrase_id = p.id AND pp.user_id = ?
-    WHERE pp.due_date <= ? AND v.translation = ?
-    ORDER BY pp.due_date ASC
-  `).all(userId, today, translation) as Array<{ id: number; phrase_text: string; verse_number: number; mastery_level: number }>;
+  const reviewResult = await db.execute({
+    sql: `SELECT p.id, p.phrase_text, v.verse_number, pp.mastery_level
+          FROM phrases p
+          JOIN verses v ON p.verse_id = v.id
+          JOIN phrase_progress pp ON pp.phrase_id = p.id AND pp.user_id = ?
+          WHERE pp.due_date <= ? AND v.translation = ?
+          ORDER BY pp.due_date ASC`,
+    args: [userId, today, translation]
+  });
+  const reviewPhrases = reviewResult.rows as unknown as Array<{ id: number; phrase_text: string; verse_number: number; mastery_level: number }>;
 
   const reviews: SessionPhrase[] = reviewPhrases.map(p => ({
     id: p.id,
@@ -57,16 +61,18 @@ export function generateDailySession(userId: string, translation: string = 'csb'
     hint_level: masteryToHintLevel(p.mastery_level),
   }));
 
-  const newPhrasesData = db.prepare(`
-    SELECT p.id, p.phrase_text, v.verse_number
-    FROM phrases p
-    JOIN verses v ON p.verse_id = v.id
-    WHERE p.id NOT IN (
-      SELECT phrase_id FROM phrase_progress WHERE user_id = ?
-    ) AND v.translation = ?
-    ORDER BY v.verse_number, p.order_in_verse
-    LIMIT 5
-  `).all(userId, translation) as Array<{ id: number; phrase_text: string; verse_number: number }>;
+  const newResult = await db.execute({
+    sql: `SELECT p.id, p.phrase_text, v.verse_number
+          FROM phrases p
+          JOIN verses v ON p.verse_id = v.id
+          WHERE p.id NOT IN (
+            SELECT phrase_id FROM phrase_progress WHERE user_id = ?
+          ) AND v.translation = ?
+          ORDER BY v.verse_number, p.order_in_verse
+          LIMIT 5`,
+    args: [userId, translation]
+  });
+  const newPhrasesData = newResult.rows as unknown as Array<{ id: number; phrase_text: string; verse_number: number }>;
 
   const newPhrases: SessionPhrase[] = newPhrasesData.map(p => ({
     id: p.id,

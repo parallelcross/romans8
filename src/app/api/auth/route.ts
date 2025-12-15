@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import db from '@/lib/db';
 import { generateUserId, getUserFromCookie, setUserCookie } from '@/lib/auth';
+import { isValidOrigin, isValidTranslation, sanitizeName } from '@/lib/security';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isValidOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
+    }
+
     const cookieStore = await cookies();
     let userId = getUserFromCookie(cookieStore);
 
@@ -13,14 +18,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const name = body.name || null;
-    const translation = body.translation || 'csb';
+    const name = sanitizeName(body.name);
+    const translation = isValidTranslation(body.translation) ? body.translation : 'csb';
 
     userId = generateUserId();
-    db.prepare(`
-      INSERT INTO users (id, name, translation, created_at)
-      VALUES (?, ?, ?, ?)
-    `).run(userId, name, translation, new Date().toISOString());
+    await db.execute({
+      sql: `INSERT INTO users (id, name, translation, created_at) VALUES (?, ?, ?, ?)`,
+      args: [userId, name, translation, new Date().toISOString()]
+    });
 
     const response = NextResponse.json({ userId });
     setUserCookie(response, userId);

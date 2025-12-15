@@ -1,11 +1,8 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient } from '@libsql/client';
 
-const dbPath = path.join(process.cwd(), 'romans8.db');
-
-export const db = new Database(dbPath);
-
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL || 'file:romans8.db',
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
 
 export default db;

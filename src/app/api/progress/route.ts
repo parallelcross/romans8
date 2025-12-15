@@ -12,51 +12,65 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = db.prepare(`SELECT translation FROM users WHERE id = ?`).get(userId) as { translation: string } | undefined;
+    const userResult = await db.execute({
+      sql: `SELECT translation FROM users WHERE id = ?`,
+      args: [userId]
+    });
+    const user = userResult.rows[0] as unknown as { translation: string } | undefined;
     const translation = user?.translation || 'csb';
 
     const today = new Date().toISOString().split('T')[0];
 
-    const phrasesTotal = (db.prepare(`
-      SELECT COUNT(*) as count FROM phrases p
-      JOIN verses v ON p.verse_id = v.id
-      WHERE v.translation = ?
-    `).get(translation) as { count: number }).count;
+    const phrasesTotalResult = await db.execute({
+      sql: `SELECT COUNT(*) as count FROM phrases p
+            JOIN verses v ON p.verse_id = v.id
+            WHERE v.translation = ?`,
+      args: [translation]
+    });
+    const phrasesTotal = (phrasesTotalResult.rows[0] as unknown as { count: number }).count;
 
-    const phrasesMastered = (db.prepare(`
-      SELECT COUNT(*) as count FROM phrase_progress pp
-      JOIN phrases p ON pp.phrase_id = p.id
-      JOIN verses v ON p.verse_id = v.id
-      WHERE pp.user_id = ? AND pp.mastery_level >= 3 AND v.translation = ?
-    `).get(userId, translation) as { count: number }).count;
+    const phrasesMasteredResult = await db.execute({
+      sql: `SELECT COUNT(*) as count FROM phrase_progress pp
+            JOIN phrases p ON pp.phrase_id = p.id
+            JOIN verses v ON p.verse_id = v.id
+            WHERE pp.user_id = ? AND pp.mastery_level >= 3 AND v.translation = ?`,
+      args: [userId, translation]
+    });
+    const phrasesMastered = (phrasesMasteredResult.rows[0] as unknown as { count: number }).count;
 
-    const verseMastery = db.prepare(`
-      SELECT v.id, v.verse_number,
-        COUNT(p.id) as total_phrases,
-        SUM(CASE WHEN pp.mastery_level >= 3 THEN 1 ELSE 0 END) as mastered_phrases
-      FROM verses v
-      JOIN phrases p ON p.verse_id = v.id
-      LEFT JOIN phrase_progress pp ON pp.phrase_id = p.id AND pp.user_id = ?
-      WHERE v.translation = ?
-      GROUP BY v.id
-    `).all(userId, translation) as Array<{ id: number; verse_number: number; total_phrases: number; mastered_phrases: number }>;
+    const verseMasteryResult = await db.execute({
+      sql: `SELECT v.id, v.verse_number,
+              COUNT(p.id) as total_phrases,
+              SUM(CASE WHEN pp.mastery_level >= 3 THEN 1 ELSE 0 END) as mastered_phrases
+            FROM verses v
+            JOIN phrases p ON p.verse_id = v.id
+            LEFT JOIN phrase_progress pp ON pp.phrase_id = p.id AND pp.user_id = ?
+            WHERE v.translation = ?
+            GROUP BY v.id`,
+      args: [userId, translation]
+    });
+    const verseMastery = verseMasteryResult.rows as unknown as Array<{ id: number; verse_number: number; total_phrases: number; mastered_phrases: number }>;
 
     const versesMastered = verseMastery.filter(v => v.total_phrases === v.mastered_phrases && v.mastered_phrases > 0).length;
 
-    const reviewsDueToday = (db.prepare(`
-      SELECT COUNT(*) as count FROM phrase_progress pp
-      JOIN phrases p ON pp.phrase_id = p.id
-      JOIN verses v ON p.verse_id = v.id
-      WHERE pp.user_id = ? AND pp.due_date <= ? AND v.translation = ?
-    `).get(userId, today, translation) as { count: number }).count;
+    const reviewsDueTodayResult = await db.execute({
+      sql: `SELECT COUNT(*) as count FROM phrase_progress pp
+            JOIN phrases p ON pp.phrase_id = p.id
+            JOIN verses v ON p.verse_id = v.id
+            WHERE pp.user_id = ? AND pp.due_date <= ? AND v.translation = ?`,
+      args: [userId, today, translation]
+    });
+    const reviewsDueToday = (reviewsDueTodayResult.rows[0] as unknown as { count: number }).count;
 
-    const recentDays = db.prepare(`
-      SELECT DISTINCT DATE(created_at) as day
-      FROM practice_events
-      WHERE user_id = ?
-      ORDER BY day DESC
-      LIMIT 30
-    `).all(userId) as Array<{ day: string }>;
+    const recentDaysResult = await db.execute({
+      sql: `SELECT DISTINCT DATE(created_at) as day
+            FROM practice_events
+            WHERE user_id = ?
+            ORDER BY day DESC
+            LIMIT 30`,
+      args: [userId]
+    });
+    const recentDays = recentDaysResult.rows as unknown as Array<{ day: string }>;
 
     let streak = 0;
     const now = new Date();

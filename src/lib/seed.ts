@@ -1,6 +1,81 @@
-import Database from 'better-sqlite3';
-import db from './db';
-import { createTables } from './schema';
+import { createClient } from '@libsql/client';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL || 'file:romans8.db',
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+async function createTables() {
+  await db.execute({
+    sql: `CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE,
+      name TEXT,
+      translation TEXT DEFAULT 'csb',
+      created_at TEXT
+    )`,
+    args: []
+  });
+
+  await db.execute({
+    sql: `CREATE TABLE IF NOT EXISTS verses (
+      id INTEGER PRIMARY KEY,
+      verse_number INTEGER,
+      translation TEXT DEFAULT 'csb',
+      verse_text TEXT,
+      UNIQUE(verse_number, translation)
+    )`,
+    args: []
+  });
+
+  await db.execute({
+    sql: `CREATE TABLE IF NOT EXISTS phrases (
+      id INTEGER PRIMARY KEY,
+      verse_id INTEGER,
+      order_in_verse INTEGER,
+      phrase_text TEXT,
+      FOREIGN KEY (verse_id) REFERENCES verses(id)
+    )`,
+    args: []
+  });
+
+  await db.execute({
+    sql: `CREATE TABLE IF NOT EXISTS phrase_progress (
+      id INTEGER PRIMARY KEY,
+      user_id TEXT,
+      phrase_id INTEGER,
+      ease_factor REAL DEFAULT 2.5,
+      interval_days INTEGER DEFAULT 0,
+      due_date TEXT,
+      repetitions INTEGER DEFAULT 0,
+      lapses INTEGER DEFAULT 0,
+      mastery_level INTEGER DEFAULT 0,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (phrase_id) REFERENCES phrases(id)
+    )`,
+    args: []
+  });
+
+  await db.execute({
+    sql: `CREATE TABLE IF NOT EXISTS practice_events (
+      id INTEGER PRIMARY KEY,
+      user_id TEXT,
+      phrase_id INTEGER,
+      event_type TEXT,
+      hint_level INTEGER,
+      input_text TEXT,
+      score REAL,
+      self_rating TEXT,
+      duration_ms INTEGER,
+      created_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (phrase_id) REFERENCES phrases(id)
+    )`,
+    args: []
+  });
+}
 import { romans8CSB } from './romans8-data';
 import { romans8ESV } from './romans8-esv';
 
@@ -77,24 +152,28 @@ function splitIntoPhrases(verseText: string): string[] {
   return phrases.filter(p => p.length > 0);
 }
 
-function seedTranslation(
+async function seedTranslation(
   verses: Array<{ verseNumber: number; text: string }>,
-  translation: string,
-  insertVerse: Database.Statement,
-  insertPhrase: Database.Statement
-): number {
+  translation: string
+): Promise<number> {
   let totalPhrases = 0;
 
   for (const verse of verses) {
-    const result = insertVerse.run(verse.verseNumber, translation, verse.text);
-    const verseId = result.lastInsertRowid;
+    const result = await db.execute({
+      sql: 'INSERT OR REPLACE INTO verses (verse_number, translation, verse_text) VALUES (?, ?, ?)',
+      args: [verse.verseNumber, translation, verse.text]
+    });
+    const verseId = Number(result.lastInsertRowid);
 
     const phrases = splitIntoPhrases(verse.text);
 
-    phrases.forEach((phrase, index) => {
-      insertPhrase.run(verseId, index + 1, phrase);
+    for (let index = 0; index < phrases.length; index++) {
+      await db.execute({
+        sql: 'INSERT INTO phrases (verse_id, order_in_verse, phrase_text) VALUES (?, ?, ?)',
+        args: [verseId, index + 1, phrases[index]]
+      });
       totalPhrases++;
-    });
+    }
 
     console.log(`[${translation.toUpperCase()}] Verse ${verse.verseNumber}: ${phrases.length} phrases`);
   }
@@ -102,22 +181,20 @@ function seedTranslation(
   return totalPhrases;
 }
 
-function seed() {
+async function seed() {
   console.log('Creating tables...');
-  createTables();
+  await createTables();
   
   console.log('Inserting verses...');
-  const insertVerse = db.prepare('INSERT OR REPLACE INTO verses (verse_number, translation, verse_text) VALUES (?, ?, ?)');
-  const insertPhrase = db.prepare('INSERT INTO phrases (verse_id, order_in_verse, phrase_text) VALUES (?, ?, ?)');
   
-  db.exec('DELETE FROM phrases');
-  db.exec('DELETE FROM verses');
+  await db.execute({ sql: 'DELETE FROM phrases', args: [] });
+  await db.execute({ sql: 'DELETE FROM verses', args: [] });
   
   console.log('\n--- Seeding CSB Translation ---');
-  const csbPhrases = seedTranslation(romans8CSB, 'csb', insertVerse, insertPhrase);
+  const csbPhrases = await seedTranslation(romans8CSB, 'csb');
 
   console.log('\n--- Seeding ESV Translation ---');
-  const esvPhrases = seedTranslation(romans8ESV, 'esv', insertVerse, insertPhrase);
+  const esvPhrases = await seedTranslation(romans8ESV, 'esv');
   
   console.log(`\nSeeding complete!`);
   console.log(`Total verses: ${romans8CSB.length + romans8ESV.length} (39 CSB + 39 ESV)`);

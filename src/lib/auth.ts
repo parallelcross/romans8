@@ -19,6 +19,7 @@ export function setUserCookie(response: NextResponse, userId: string): void {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    path: '/',
     expires: new Date(Date.now() + ONE_YEAR_MS),
   });
 }
