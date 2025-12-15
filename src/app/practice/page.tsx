@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, KeyboardEvent } from "react";
+import { useState, useEffect, useRef, KeyboardEvent } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,6 @@ interface PhraseItem {
 }
 
 interface Session {
-  sessionId: number;
   phrases: PhraseItem[];
   translation: string;
 }
@@ -26,23 +25,33 @@ interface WordScore {
   status: "correct" | "close" | "missing" | "extra";
 }
 
-interface CheckResult {
+interface ReviewResult {
   score: number;
   wordResults: WordScore[];
+  passed: boolean;
+  nextReview: string;
 }
+
+type SelfRating = "too_easy" | "good" | "hard" | "fail";
 
 export default function PracticePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userInput, setUserInput] = useState("");
-  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
+  const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
+  const startTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     fetchSession();
   }, []);
+
+  useEffect(() => {
+    // Reset timer when moving to new phrase
+    startTimeRef.current = Date.now();
+  }, [currentIndex]);
 
   const fetchSession = async () => {
     try {
@@ -60,69 +69,53 @@ export default function PracticePage() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (rating: SelfRating) => {
     if (!session || !userInput.trim()) return;
-    
+
     setIsSubmitting(true);
     const currentPhrase = session.phrases[currentIndex];
-    
+    const durationMs = Date.now() - startTimeRef.current;
+
     try {
-      const res = await fetch("/api/check", {
+      const res = await fetch("/api/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phraseId: currentPhrase.phraseId,
-          userInput: userInput.trim(),
+          inputText: userInput.trim(),
+          selfRating: rating,
+          durationMs,
         }),
       });
       const result = await res.json();
-      setCheckResult(result);
+      if (result.error) {
+        console.error("Review error:", result.error);
+      } else {
+        setReviewResult(result);
+      }
     } catch (error) {
-      console.error("Failed to check answer:", error);
+      console.error("Failed to submit review:", error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleRating = async (rating: "easy" | "good" | "hard") => {
-    if (!session) return;
-    
-    const currentPhrase = session.phrases[currentIndex];
-    
-    try {
-      await fetch("/api/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phraseId: currentPhrase.phraseId,
-          sessionId: session.sessionId,
-          rating,
-          score: checkResult?.score ?? 0,
-        }),
-      });
-    } catch (error) {
-      console.error("Failed to submit rating:", error);
-    }
-
-    handleNext();
-  };
-
   const handleNext = () => {
     if (!session) return;
-    
+
     if (currentIndex + 1 >= session.phrases.length) {
       setSessionComplete(true);
     } else {
       setCurrentIndex(currentIndex + 1);
       setUserInput("");
-      setCheckResult(null);
+      setReviewResult(null);
     }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !checkResult) {
+    if (e.key === "Enter" && !e.shiftKey && !reviewResult) {
       e.preventDefault();
-      handleSubmit();
+      handleSubmit("good");
     }
   };
 
@@ -173,7 +166,9 @@ export default function PracticePage() {
           </motion.div>
           <h1 className="font-display text-3xl font-bold">Session Complete!</h1>
           <p className="text-muted-foreground">
-            {session ? `You reviewed ${session.phrases.length} phrases.` : "No phrases due for review today."}
+            {session
+              ? `You reviewed ${session.phrases.length} phrases.`
+              : "No phrases due for review today. Check back tomorrow!"}
           </p>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -185,7 +180,7 @@ export default function PracticePage() {
               <Link href="/progress">View Progress</Link>
             </Button>
             <Button variant="outline" asChild size="lg">
-              <Link href="/">Back to Home</Link>
+              <Link href="/run">Practice Verses</Link>
             </Button>
           </motion.div>
         </motion.div>
@@ -240,18 +235,29 @@ export default function PracticePage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="font-display text-lg">Recall this phrase</CardTitle>
+                  <CardTitle className="font-display text-lg">
+                    Type this phrase from memory
+                  </CardTitle>
                   <Badge>Romans 8:{currentPhrase.verseNumber}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Prompt Text */}
-                <div className="verse-text text-xl md:text-2xl leading-relaxed text-foreground/90">
-                  {currentPhrase.phraseText}
+                {/* Prompt Text - Show hint based on mastery */}
+                <div className="verse-text text-xl md:text-2xl leading-relaxed text-foreground/90 bg-muted/30 p-4 rounded-lg">
+                  {currentPhrase.masteryLevel >= 3 ? (
+                    <span className="text-muted-foreground italic">
+                      {currentPhrase.phraseText
+                        .split(" ")
+                        .map((w) => w[0] + "_".repeat(Math.min(w.length - 1, 6)))
+                        .join(" ")}
+                    </span>
+                  ) : (
+                    currentPhrase.phraseText
+                  )}
                 </div>
 
                 {/* Input Area */}
-                {!checkResult ? (
+                {!reviewResult ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -266,21 +272,39 @@ export default function PracticePage() {
                       className="w-full h-32 p-4 bg-muted/50 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                       autoFocus
                     />
-                    <Button
-                      onClick={handleSubmit}
-                      disabled={isSubmitting || !userInput.trim()}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {isSubmitting ? (
-                        "Checking..."
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4" />
-                          Check Answer
-                        </>
-                      )}
-                    </Button>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => handleSubmit("hard")}
+                        disabled={isSubmitting || !userInput.trim()}
+                        className="border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white"
+                      >
+                        Hard
+                      </Button>
+                      <Button
+                        onClick={() => handleSubmit("good")}
+                        disabled={isSubmitting || !userInput.trim()}
+                        size="lg"
+                      >
+                        {isSubmitting ? "..." : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Good
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleSubmit("too_easy")}
+                        disabled={isSubmitting || !userInput.trim()}
+                        className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
+                      >
+                        Easy
+                      </Button>
+                    </div>
+                    <p className="text-xs text-center text-muted-foreground">
+                      Press Enter to submit as &quot;Good&quot;
+                    </p>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -292,74 +316,52 @@ export default function PracticePage() {
                     {/* Feedback Area */}
                     <div className="bg-muted/30 rounded-lg p-5 space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-muted-foreground">Score</span>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {reviewResult.passed ? "Correct!" : "Keep practicing"}
+                        </span>
                         <div className="flex items-center gap-2">
-                          {checkResult.score >= 0.9 && (
+                          {reviewResult.score >= 0.9 && (
                             <Sparkles className="w-4 h-4 text-yellow-500" />
                           )}
                           <span className="text-2xl font-bold">
-                            {Math.round(checkResult.score * 100)}%
+                            {Math.round(reviewResult.score * 100)}%
                           </span>
                         </div>
                       </div>
-                      
+
                       <div className="verse-text text-lg leading-relaxed">
-                        {checkResult.wordResults.map((wr, i) => (
+                        {(reviewResult.wordResults || []).map((wr, i) => (
                           <span key={i}>
-                            <span className={getWordColor(wr.status)}>{wr.word}</span>
-                            {i < checkResult.wordResults.length - 1 ? " " : ""}
+                            <span className={getWordColor(wr.status)}>
+                              {wr.word}
+                            </span>
+                            {i < (reviewResult.wordResults || []).length - 1
+                              ? " "
+                              : ""}
                           </span>
                         ))}
                       </div>
-                      
+
                       <div className="flex gap-4 text-xs text-muted-foreground pt-2">
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-green-500" /> correct
+                          <span className="w-2 h-2 rounded-full bg-green-500" />{" "}
+                          correct
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-yellow-500" /> close
+                          <span className="w-2 h-2 rounded-full bg-yellow-500" />{" "}
+                          close
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-red-500" /> missing
+                          <span className="w-2 h-2 rounded-full bg-red-500" />{" "}
+                          missing
                         </span>
                       </div>
                     </div>
 
-                    {/* Rating Buttons */}
-                    <div className="space-y-3">
-                      <p className="text-center text-sm text-muted-foreground">How did that feel?</p>
-                      <div className="grid grid-cols-3 gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => handleRating("easy")}
-                          className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
-                        >
-                          Too Easy
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => handleRating("good")}
-                          className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                        >
-                          Good
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => handleRating("hard")}
-                          className="border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white"
-                        >
-                          Hard
-                        </Button>
-                      </div>
-                      <Button
-                        variant="secondary"
-                        onClick={handleNext}
-                        className="w-full"
-                      >
-                        Skip Rating
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <Button onClick={handleNext} className="w-full" size="lg">
+                      Next Phrase
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
                   </motion.div>
                 )}
               </CardContent>
