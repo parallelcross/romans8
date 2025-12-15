@@ -15,7 +15,7 @@ export function middleware(request: NextRequest) {
 
   const userId = request.cookies.get(COOKIE_NAME);
 
-  if (!userId && (pathname.startsWith('/practice') || pathname.startsWith('/progress') || pathname.startsWith('/run'))) {
+  if (!userId && (pathname.startsWith('/progress') || pathname.startsWith('/run'))) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 

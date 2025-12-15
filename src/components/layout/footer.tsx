@@ -8,7 +8,7 @@ const copyrights = {
   esv: "Scripture quotations from the ESV® © 2001 Crossway. Used by permission.",
 };
 
-const scripturePages = ["/practice", "/run"];
+const scripturePages = ["/run"];
 
 export function Footer() {
   const pathname = usePathname();

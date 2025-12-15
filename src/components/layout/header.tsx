@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, BarChart3, Zap } from "lucide-react";
+import { BookOpen, BarChart3 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/practice", label: "Practice", icon: Zap },
   { href: "/run", label: "Verses", icon: BookOpen },
   { href: "/progress", label: "Progress", icon: BarChart3 },
 ];

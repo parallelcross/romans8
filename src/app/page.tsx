@@ -3,28 +3,21 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Zap, BookOpen, BarChart3, Brain, Calendar, Trophy } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BookOpen, BarChart3, Brain, Trophy } from "lucide-react";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 const features = [
   {
-    title: "Practice",
-    description: "Active recall with spaced repetition to build lasting memory",
-    icon: Zap,
-    href: "/practice",
-    color: "text-amber-500",
-  },
-  {
     title: "Verses",
-    description: "Choose specific verses or ranges to focus your practice",
+    description: "Practice any verse or range from Romans 8",
     icon: BookOpen,
     href: "/run",
     color: "text-emerald-500",
   },
   {
     title: "Progress",
-    description: "Track your streak, mastery level, and weak spots",
+    description: "Track your mastery and milestones",
     icon: BarChart3,
     href: "/progress",
     color: "text-blue-500",
@@ -39,13 +32,13 @@ const steps = [
   },
   {
     icon: Brain,
-    title: "Practice daily",
-    description: "Type from memory with progressive hints that fade as you learn",
+    title: "Type from memory",
+    description: "Practice recall with progressive hints that fade as you learn",
   },
   {
     icon: Trophy,
     title: "Track progress",
-    description: "Watch your mastery grow with streaks and milestone celebrations",
+    description: "Watch your mastery grow with milestones",
   },
 ];
 
@@ -74,7 +67,7 @@ export default function Home() {
           Memorize Romans 8
         </h1>
         <p className="text-lg md:text-xl text-muted-foreground mb-2">
-          Master scripture through active recall and spaced repetition
+          Master scripture through active recall
         </p>
         <p className="text-sm text-muted-foreground/70">
           Currently studying: {displayTranslation}
@@ -86,7 +79,7 @@ export default function Home() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="grid md:grid-cols-3 gap-6 mb-20"
+        className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-20"
       >
         {features.map((feature, i) => {
           const Icon = feature.icon;
@@ -160,7 +153,7 @@ export default function Home() {
         className="text-center mt-16"
       >
         <Button asChild size="lg" className="text-base px-8">
-          <Link href="/practice">Start Practicing</Link>
+          <Link href="/run">Start Practicing</Link>
         </Button>
       </motion.div>
     </div>

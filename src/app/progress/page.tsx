@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Flame, Trophy, Target, Calendar, CheckCircle, Circle, ArrowLeft } from "lucide-react";
+import { Flame, Trophy, Target, CheckCircle, Circle, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -196,20 +196,12 @@ export default function ProgressPage() {
           </Card>
         </motion.div>
 
-        <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">
           <Card className="hover:shadow-md transition-shadow">
             <CardContent className="pt-6 text-center">
               <Flame className="size-8 mx-auto text-orange-500 mb-2" />
               <div className="text-3xl font-bold">{progress.streak}</div>
               <div className="text-sm text-muted-foreground">Day Streak</div>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="pt-6 text-center">
-              <Calendar className="size-8 mx-auto text-blue-500 mb-2" />
-              <div className="text-3xl font-bold">{progress.reviewsDueToday}</div>
-              <div className="text-sm text-muted-foreground">Due Today</div>
             </CardContent>
           </Card>
 
