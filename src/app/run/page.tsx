@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { BookOpen, Play, ChevronDown, RotateCcw, ArrowLeft, Check, AlertCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import WordResult from "@/components/WordResult";
 
 interface PhraseInfo {
@@ -29,10 +35,17 @@ interface RunResult {
 
 const HINT_LABELS = [
   "No hints",
-  "First word only",
+  "First word",
   "First letters",
   "Full text",
 ];
+
+const fadeIn = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -10 },
+  transition: { duration: 0.2 },
+};
 
 export default function RunPage() {
   const [verseStart, setVerseStart] = useState(1);
@@ -147,7 +160,7 @@ export default function RunPage() {
 
   const renderHint = () => {
     if (hintLevel === 0) {
-      return <p className="text-foreground/50 italic">No hint - recall from memory</p>;
+      return <p className="text-muted-foreground italic">No hint - recall from memory</p>;
     }
     
     const words = combinedText.split(" ");
@@ -155,16 +168,16 @@ export default function RunPage() {
     if (hintLevel === 1) {
       const firstWord = words[0];
       return (
-        <p className="text-lg leading-relaxed">
+        <p className="text-lg leading-relaxed font-serif">
           <span className="font-medium">{firstWord}</span>
-          <span className="text-foreground/30"> {"_ ".repeat(Math.min(words.length - 1, 20))}...</span>
+          <span className="text-muted-foreground/50"> {"_ ".repeat(Math.min(words.length - 1, 20))}...</span>
         </p>
       );
     }
     
     if (hintLevel === 2) {
       return (
-        <p className="text-lg text-foreground/50 leading-relaxed">
+        <p className="text-lg text-muted-foreground leading-relaxed font-serif">
           {words.slice(0, 50).map((word, i) => (
             <span key={i}>
               {word[0]}{"_".repeat(Math.min(word.length - 1, 8))}
@@ -177,256 +190,336 @@ export default function RunPage() {
     }
     
     if (hintLevel >= 3) {
-      return <p className="text-lg text-foreground/70 leading-relaxed">{combinedText}</p>;
+      return <p className="text-lg text-foreground/80 leading-relaxed font-serif">{combinedText}</p>;
     }
     
     return null;
   };
 
+  const getScoreColor = (score: number) => {
+    if (score >= 0.9) return "text-green-600 dark:text-green-400";
+    if (score >= 0.7) return "text-yellow-600 dark:text-yellow-400";
+    return "text-red-600 dark:text-red-400";
+  };
+
   if (!isRunning) {
     return (
-      <main className="min-h-screen p-8">
-        <div className="max-w-2xl mx-auto space-y-8">
-          <div className="flex justify-between items-center">
-            <Link href="/" className="text-foreground/50 hover:text-foreground transition-colors">
-              ← Back
-            </Link>
-            <h1 className="text-2xl font-bold">Practice Verses</h1>
-            <div />
-          </div>
-
-          <div className="bg-foreground/5 rounded-xl p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">Translation</span>
-              <span className="text-foreground/50">{translation.toUpperCase()}</span>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleTranslationChange("csb")}
-                disabled={isSwitching}
-                className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
-                  translation === "csb"
-                    ? "bg-blue-600 text-white"
-                    : "border border-foreground/20 hover:bg-foreground/5"
-                }`}
-              >
-                CSB
-              </button>
-              <button
-                onClick={() => handleTranslationChange("esv")}
-                disabled={isSwitching}
-                className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
-                  translation === "esv"
-                    ? "bg-blue-600 text-white"
-                    : "border border-foreground/20 hover:bg-foreground/5"
-                }`}
-              >
-                ESV
-              </button>
+      <motion.main 
+        className="min-h-screen p-6 md:p-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+      >
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" asChild>
+              <Link href="/">
+                <ArrowLeft className="size-5" />
+              </Link>
+            </Button>
+            <div className="flex items-center gap-2">
+              <BookOpen className="size-6 text-primary" />
+              <h1 className="text-2xl font-bold">Practice Verses</h1>
             </div>
           </div>
 
-          <div className="bg-foreground/5 rounded-xl p-6 space-y-6">
-            <div className="space-y-4">
-              <h2 className="font-medium">Quick Select</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setQuickRange(1, 39)}
-                  className="py-2 px-4 border border-foreground/20 hover:bg-foreground/10 rounded-lg transition-colors"
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Translation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex rounded-lg border overflow-hidden">
+                <Button
+                  variant={translation === "csb" ? "default" : "ghost"}
+                  onClick={() => handleTranslationChange("csb")}
+                  disabled={isSwitching}
+                  className="flex-1 rounded-none"
                 >
-                  Full Chapter (1-39)
-                </button>
-                <button
-                  onClick={() => setQuickRange(1, 4)}
-                  className="py-2 px-4 border border-foreground/20 hover:bg-foreground/10 rounded-lg transition-colors"
+                  CSB
+                </Button>
+                <Button
+                  variant={translation === "esv" ? "default" : "ghost"}
+                  onClick={() => handleTranslationChange("esv")}
+                  disabled={isSwitching}
+                  className="flex-1 rounded-none border-l"
                 >
-                  First 4 Verses
-                </button>
-                <button
-                  onClick={() => setQuickRange(1, 19)}
-                  className="py-2 px-4 border border-foreground/20 hover:bg-foreground/10 rounded-lg transition-colors"
-                >
-                  First Half (1-19)
-                </button>
-                <button
-                  onClick={() => setQuickRange(20, 39)}
-                  className="py-2 px-4 border border-foreground/20 hover:bg-foreground/10 rounded-lg transition-colors"
-                >
-                  Second Half (20-39)
-                </button>
+                  ESV
+                </Button>
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="space-y-4">
-              <h2 className="font-medium">Custom Range</h2>
-              <div className="flex gap-4 items-center">
-                <div className="flex-1">
-                  <label className="block text-sm text-foreground/50 mb-1">Start Verse</label>
-                  <select
-                    value={verseStart}
-                    onChange={(e) => {
-                      const newStart = parseInt(e.target.value, 10);
-                      setVerseStart(newStart);
-                      if (newStart > verseEnd) setVerseEnd(newStart);
-                    }}
-                    className="w-full p-2 bg-background border border-foreground/20 rounded-lg"
-                  >
-                    {Array.from({ length: 39 }, (_, i) => i + 1).map((v) => (
-                      <option key={v} value={v}>
-                        Verse {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm text-foreground/50 mb-1">End Verse</label>
-                  <select
-                    value={verseEnd}
-                    onChange={(e) => setVerseEnd(parseInt(e.target.value, 10))}
-                    className="w-full p-2 bg-background border border-foreground/20 rounded-lg"
-                  >
-                    {Array.from({ length: 39 - verseStart + 1 }, (_, i) => verseStart + i).map((v) => (
-                      <option key={v} value={v}>
-                        Verse {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h2 className="font-medium">Hint Level</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quick Select</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="grid grid-cols-2 gap-3">
-                {([0, 1, 2, 3] as const).map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setHintLevel(level)}
-                    className={`py-2 px-4 border rounded-lg transition-colors ${
-                      hintLevel === level
-                        ? "border-blue-600 bg-blue-600 text-white"
-                        : "border-foreground/20 hover:bg-foreground/10"
-                    }`}
+                {[
+                  { label: "Full Chapter", range: [1, 39] },
+                  { label: "First 4 Verses", range: [1, 4] },
+                  { label: "First Half", range: [1, 19] },
+                  { label: "Second Half", range: [20, 39] },
+                ].map(({ label, range }) => (
+                  <Button
+                    key={label}
+                    variant={verseStart === range[0] && verseEnd === range[1] ? "default" : "outline"}
+                    onClick={() => setQuickRange(range[0], range[1])}
+                    className="h-auto py-3"
                   >
-                    {level}: {HINT_LABELS[level]}
-                  </button>
+                    <span className="text-sm">{label}</span>
+                  </Button>
                 ))}
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <button
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Custom Range</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4 items-end">
+                <div className="flex-1 space-y-2">
+                  <label className="text-sm text-muted-foreground">Start Verse</label>
+                  <div className="relative">
+                    <select
+                      value={verseStart}
+                      onChange={(e) => {
+                        const newStart = parseInt(e.target.value, 10);
+                        setVerseStart(newStart);
+                        if (newStart > verseEnd) setVerseEnd(newStart);
+                      }}
+                      className="w-full h-10 px-3 pr-8 bg-background border rounded-md appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {Array.from({ length: 39 }, (_, i) => i + 1).map((v) => (
+                        <option key={v} value={v}>
+                          Verse {v}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <label className="text-sm text-muted-foreground">End Verse</label>
+                  <div className="relative">
+                    <select
+                      value={verseEnd}
+                      onChange={(e) => setVerseEnd(parseInt(e.target.value, 10))}
+                      className="w-full h-10 px-3 pr-8 bg-background border rounded-md appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {Array.from({ length: 39 - verseStart + 1 }, (_, i) => verseStart + i).map((v) => (
+                        <option key={v} value={v}>
+                          Verse {v}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Hint Level</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex rounded-lg border overflow-hidden">
+                {([0, 1, 2, 3] as const).map((level) => (
+                  <Button
+                    key={level}
+                    variant={hintLevel === level ? "default" : "ghost"}
+                    onClick={() => setHintLevel(level)}
+                    className="flex-1 rounded-none text-xs px-2 h-10"
+                  >
+                    {HINT_LABELS[level]}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Button
             onClick={startRun}
             disabled={isLoading}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-lg"
+            size="lg"
+            className="w-full h-14 text-lg gap-2"
           >
+            <Play className="size-5" />
             {isLoading ? "Loading..." : "Start Run"}
-          </button>
+          </Button>
         </div>
-      </main>
+      </motion.main>
     );
   }
 
   return (
-    <main className="min-h-screen p-8">
+    <motion.main 
+      className="min-h-screen p-6 md:p-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+    >
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
-          <button
-            onClick={handleBack}
-            className="text-foreground/50 hover:text-foreground transition-colors"
-          >
-            ← Back
-          </button>
-          <span className="text-sm text-foreground/50">
-            Romans 8:{verseStart}-{verseEnd} • Hint Level {hintLevel}
-          </span>
+          <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1">
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+          <Badge variant="secondary" className="text-sm">
+            Romans 8:{verseStart}-{verseEnd} • Hint {hintLevel}
+          </Badge>
         </div>
 
-        {!result ? (
-          <>
-            <div className="bg-foreground/5 rounded-xl p-6 space-y-3 max-h-64 overflow-y-auto">
-              <div className="text-sm text-foreground/50 font-medium">
-                Romans 8:{verseStart}-{verseEnd}
-              </div>
-              {renderHint()}
-            </div>
+        <AnimatePresence mode="wait">
+          {!result ? (
+            <motion.div key="input" {...fadeIn} className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm text-muted-foreground font-normal">
+                    Romans 8:{verseStart}-{verseEnd}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-48 overflow-y-auto">
+                  {renderHint()}
+                </CardContent>
+              </Card>
 
-            <div className="space-y-4">
-              <textarea
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="Type the passage from memory..."
-                className="w-full h-64 p-4 bg-foreground/5 border border-foreground/10 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                autoFocus
-              />
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !userInput.trim()}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-              >
-                {isSubmitting ? "Checking..." : "Submit"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="space-y-6">
-            <div className="bg-foreground/5 rounded-xl p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-foreground/50">Overall Score</span>
-                <span className="text-3xl font-bold">{Math.round(result.score * 100)}%</span>
+              <div className="space-y-4">
+                <textarea
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  placeholder="Type the passage from memory..."
+                  className="w-full h-64 p-4 bg-muted/50 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-ring transition-shadow duration-150 font-serif text-lg"
+                  autoFocus
+                />
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !userInput.trim()}
+                  size="lg"
+                  className="w-full h-12 gap-2"
+                >
+                  <Check className="size-5" />
+                  {isSubmitting ? "Checking..." : "Submit"}
+                </Button>
               </div>
-            </div>
+              
+              <div className="flex justify-center">
+                <Progress value={userInput.length > 0 ? Math.min((userInput.length / (combinedText.length || 1)) * 100, 100) : 0} className="w-48" />
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div key="results" {...fadeIn} className="space-y-6">
+              <Card className="overflow-hidden">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="relative size-32">
+                      <svg className="size-32 -rotate-90" viewBox="0 0 100 100">
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="45"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="8"
+                          className="text-muted"
+                        />
+                        <motion.circle
+                          cx="50"
+                          cy="50"
+                          r="45"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="8"
+                          strokeLinecap="round"
+                          className={getScoreColor(result.score)}
+                          strokeDasharray={`${result.score * 283} 283`}
+                          initial={{ strokeDasharray: "0 283" }}
+                          animate={{ strokeDasharray: `${result.score * 283} 283` }}
+                          transition={{ duration: 0.8, ease: "easeOut" }}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className={`text-3xl font-bold ${getScoreColor(result.score)}`}>
+                          {Math.round(result.score * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-muted-foreground">Overall Score</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-            <div className="bg-foreground/5 rounded-xl p-6 space-y-4">
-              <h3 className="font-medium">Word-by-Word Results</h3>
-              <div className="text-lg leading-relaxed max-h-64 overflow-y-auto">
-                {(result.wordResults || []).map((wr, i) => (
-                  <span key={i}>
-                    <WordResult word={wr.word} status={wr.status} />
-                    {i < (result.wordResults || []).length - 1 ? " " : ""}
-                  </span>
-                ))}
-              </div>
-              <div className="pt-2 text-sm text-foreground/50">
-                <span className="text-green-600 dark:text-green-400">●</span> correct{" "}
-                <span className="text-yellow-600 dark:text-yellow-400">●</span> close{" "}
-                <span className="text-red-600 dark:text-red-400">●</span> missing/extra
-              </div>
-            </div>
-
-            {result.weakPhrases.length > 0 && (
-              <div className="bg-foreground/5 rounded-xl p-6 space-y-4">
-                <h3 className="font-medium">Weak Phrases to Review</h3>
-                <ul className="space-y-3">
-                  {result.weakPhrases.map((wp) => (
-                    <li key={wp.phraseId} className="flex justify-between items-start gap-4">
-                      <span className="text-foreground/70">{wp.phraseText}</span>
-                      <span className="text-sm text-foreground/50 whitespace-nowrap">
-                        {Math.round(wp.score * 100)}%
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Word-by-Word Results</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-lg leading-relaxed max-h-64 overflow-y-auto font-serif">
+                    {(result.wordResults || []).map((wr, i) => (
+                      <span key={i}>
+                        <WordResult word={wr.word} status={wr.status} />
+                        {i < (result.wordResults || []).length - 1 ? " " : ""}
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t flex flex-wrap gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2.5 rounded-full bg-green-500" /> correct
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2.5 rounded-full bg-yellow-500" /> close
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2.5 rounded-full bg-red-500" /> missing/extra
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
 
-            <div className="flex gap-4">
-              <button
-                onClick={handleTryAgain}
-                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-              >
-                Try Again
-              </button>
-              <Link
-                href="/practice"
-                className="flex-1 py-3 border border-foreground/20 hover:bg-foreground/5 font-medium rounded-lg transition-colors text-center"
-              >
-                Back to Practice
-              </Link>
-            </div>
-          </div>
-        )}
+              {result.weakPhrases.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <AlertCircle className="size-4 text-yellow-500" />
+                      Weak Phrases to Review
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {result.weakPhrases.map((wp) => (
+                      <motion.div
+                        key={wp.phraseId}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex justify-between items-start gap-4 p-3 rounded-lg bg-muted/50"
+                      >
+                        <span className="text-foreground/80 font-serif">{wp.phraseText}</span>
+                        <Badge variant="outline" className="shrink-0">
+                          {Math.round(wp.score * 100)}%
+                        </Badge>
+                      </motion.div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex gap-4">
+                <Button onClick={handleTryAgain} className="flex-1 h-12 gap-2">
+                  <RotateCcw className="size-4" />
+                  Try Again
+                </Button>
+                <Button variant="outline" asChild className="flex-1 h-12">
+                  <Link href="/practice">Back to Practice</Link>
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </main>
+    </motion.main>
   );
 }

@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, KeyboardEvent } from "react";
 import Link from "next/link";
-import PhraseCard from "@/components/PhraseCard";
-import WordResult from "@/components/WordResult";
+import { motion, AnimatePresence } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Check, ChevronRight, Sparkles, Trophy } from "lucide-react";
 
 interface PhraseItem {
   phraseId: number;
@@ -116,10 +119,37 @@ export default function PracticePage() {
     }
   };
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !checkResult) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const getWordColor = (status: WordScore["status"]) => {
+    switch (status) {
+      case "correct":
+        return "text-green-600 dark:text-green-400";
+      case "close":
+        return "text-yellow-600 dark:text-yellow-400";
+      case "missing":
+      case "extra":
+        return "text-red-600 dark:text-red-400 line-through";
+      default:
+        return "";
+    }
+  };
+
   if (isLoading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="text-foreground/50">Loading session...</p>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-muted-foreground"
+        >
+          Loading session...
+        </motion.div>
       </main>
     );
   }
@@ -127,26 +157,38 @@ export default function PracticePage() {
   if (sessionComplete) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-8">
-        <div className="max-w-md text-center space-y-6">
-          <h1 className="text-3xl font-bold">Session Complete!</h1>
-          <p className="text-foreground/70">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+          className="max-w-md text-center space-y-6"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center"
+          >
+            <Trophy className="w-8 h-8 text-primary" />
+          </motion.div>
+          <h1 className="font-display text-3xl font-bold">Session Complete!</h1>
+          <p className="text-muted-foreground">
             {session ? `You reviewed ${session.phrases.length} phrases.` : "No phrases due for review today."}
           </p>
-          <div className="flex flex-col gap-4 pt-4">
-            <Link
-              href="/progress"
-              className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              View Progress
-            </Link>
-            <Link
-              href="/"
-              className="px-8 py-3 border border-foreground/20 hover:bg-foreground/5 font-medium rounded-lg transition-colors"
-            >
-              Back to Home
-            </Link>
-          </div>
-        </div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="flex flex-col gap-3 pt-4"
+          >
+            <Button asChild size="lg">
+              <Link href="/progress">View Progress</Link>
+            </Button>
+            <Button variant="outline" asChild size="lg">
+              <Link href="/">Back to Home</Link>
+            </Button>
+          </motion.div>
+        </motion.div>
       </main>
     );
   }
@@ -154,7 +196,7 @@ export default function PracticePage() {
   if (!session) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="text-foreground/50">No session available</p>
+        <p className="text-muted-foreground">No session available</p>
       </main>
     );
   }
@@ -162,98 +204,168 @@ export default function PracticePage() {
   const currentPhrase = session.phrases[currentIndex];
 
   return (
-    <main className="min-h-screen p-8">
+    <main className="min-h-screen p-6 md:p-8">
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex justify-between items-center">
-          <Link href="/" className="text-foreground/50 hover:text-foreground transition-colors">
-            ← Back
-          </Link>
-          <div className="text-center">
-            <span className="text-sm font-medium">Romans 8 ({session.translation.toUpperCase()})</span>
+        {/* Top: Session Info */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-between items-center"
+        >
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/">
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </Link>
+          </Button>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary">
+              Romans 8 • {session.translation.toUpperCase()}
+            </Badge>
+            <span className="text-sm text-muted-foreground font-medium">
+              {currentIndex + 1} of {session.phrases.length}
+            </span>
           </div>
-          <span className="text-sm text-foreground/50">
-            {currentIndex + 1} of {session.phrases.length}
-          </span>
-        </div>
+        </motion.div>
 
-        <PhraseCard
-          phrase={currentPhrase.phraseText}
-          hintLevel={currentPhrase.masteryLevel}
-          verseNumber={currentPhrase.verseNumber}
-        />
+        {/* Main: Prompt Card */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentIndex}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="font-display text-lg">Recall this phrase</CardTitle>
+                  <Badge>Romans 8:{currentPhrase.verseNumber}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Prompt Text */}
+                <div className="verse-text text-xl md:text-2xl leading-relaxed text-foreground/90">
+                  {currentPhrase.phraseText}
+                </div>
 
-        {!checkResult ? (
-          <div className="space-y-4">
-            <textarea
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              placeholder="Type the phrase from memory..."
-              className="w-full h-32 p-4 bg-foreground/5 border border-foreground/10 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !userInput.trim()}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-            >
-              {isSubmitting ? "Checking..." : "Check Answer"}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="bg-foreground/5 rounded-xl p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-foreground/50">Score</span>
-                <span className="text-2xl font-bold">{Math.round(checkResult.score * 100)}%</span>
-              </div>
-              
-              <div className="text-lg leading-relaxed">
-                {checkResult.wordResults.map((wr, i) => (
-                  <span key={i}>
-                    <WordResult word={wr.word} status={wr.status} />
-                    {i < checkResult.wordResults.length - 1 ? " " : ""}
-                  </span>
-                ))}
-              </div>
-              
-              <div className="pt-2 text-sm text-foreground/50">
-                <span className="text-green-600 dark:text-green-400">●</span> correct{" "}
-                <span className="text-yellow-600 dark:text-yellow-400">●</span> close{" "}
-                <span className="text-red-600 dark:text-red-400">●</span> missing/extra
-              </div>
-            </div>
+                {/* Input Area */}
+                {!checkResult ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                    className="space-y-4"
+                  >
+                    <textarea
+                      value={userInput}
+                      onChange={(e) => setUserInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Type the phrase from memory..."
+                      className="w-full h-32 p-4 bg-muted/50 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+                      autoFocus
+                    />
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isSubmitting || !userInput.trim()}
+                      className="w-full"
+                      size="lg"
+                    >
+                      {isSubmitting ? (
+                        "Checking..."
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          Check Answer
+                        </>
+                      )}
+                    </Button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-6"
+                  >
+                    {/* Feedback Area */}
+                    <div className="bg-muted/30 rounded-lg p-5 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-muted-foreground">Score</span>
+                        <div className="flex items-center gap-2">
+                          {checkResult.score >= 0.9 && (
+                            <Sparkles className="w-4 h-4 text-yellow-500" />
+                          )}
+                          <span className="text-2xl font-bold">
+                            {Math.round(checkResult.score * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="verse-text text-lg leading-relaxed">
+                        {checkResult.wordResults.map((wr, i) => (
+                          <span key={i}>
+                            <span className={getWordColor(wr.status)}>{wr.word}</span>
+                            {i < checkResult.wordResults.length - 1 ? " " : ""}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      <div className="flex gap-4 text-xs text-muted-foreground pt-2">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-green-500" /> correct
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-yellow-500" /> close
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-red-500" /> missing
+                        </span>
+                      </div>
+                    </div>
 
-            <div className="space-y-3">
-              <p className="text-center text-sm text-foreground/50">How did that feel?</p>
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => handleRating("easy")}
-                  className="py-3 border border-green-600 text-green-600 hover:bg-green-600 hover:text-white font-medium rounded-lg transition-colors"
-                >
-                  Too Easy
-                </button>
-                <button
-                  onClick={() => handleRating("good")}
-                  className="py-3 border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white font-medium rounded-lg transition-colors"
-                >
-                  Good
-                </button>
-                <button
-                  onClick={() => handleRating("hard")}
-                  className="py-3 border border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white font-medium rounded-lg transition-colors"
-                >
-                  Hard
-                </button>
-              </div>
-              <button
-                onClick={handleNext}
-                className="w-full py-3 bg-foreground/10 hover:bg-foreground/20 font-medium rounded-lg transition-colors"
-              >
-                Skip Rating → Next
-              </button>
-            </div>
-          </div>
-        )}
+                    {/* Rating Buttons */}
+                    <div className="space-y-3">
+                      <p className="text-center text-sm text-muted-foreground">How did that feel?</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => handleRating("easy")}
+                          className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
+                        >
+                          Too Easy
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleRating("good")}
+                          className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                        >
+                          Good
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleRating("hard")}
+                          className="border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white"
+                        >
+                          Hard
+                        </Button>
+                      </div>
+                      <Button
+                        variant="secondary"
+                        onClick={handleNext}
+                        className="w-full"
+                      >
+                        Skip Rating
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </main>
   );
