@@ -14,10 +14,10 @@ export function Footer() {
   const pathname = usePathname();
   const [translation, setTranslation] = useState<"csb" | "esv" | null>(null);
 
-  const showCopyright = scripturePages.some((page) => pathname.startsWith(page));
+  const showFooter = scripturePages.some((page) => pathname.startsWith(page));
 
   useEffect(() => {
-    if (!showCopyright) return;
+    if (!showFooter) return;
 
     fetch("/api/user")
       .then((res) => (res.ok ? res.json() : null))
@@ -27,27 +27,16 @@ export function Footer() {
         }
       })
       .catch(() => {});
-  }, [showCopyright]);
+  }, [showFooter]);
+
+  if (!showFooter) return null;
 
   return (
-    <footer className="border-t py-6 mt-auto">
-      <div className="container-page space-y-3">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <p>Memorize Romans 8</p>
-          <p>v1.0</p>
-        </div>
-        {showCopyright && (
-          <p className="text-xs text-muted-foreground/70 text-center sm:text-left">
-            {translation ? copyrights[translation] : (
-              <>
-                {copyrights.csb}
-                <br className="sm:hidden" />
-                <span className="hidden sm:inline"> • </span>
-                {copyrights.esv}
-              </>
-            )}
-          </p>
-        )}
+    <footer className="border-t py-4 mt-auto">
+      <div className="container-page">
+        <p className="text-xs text-muted-foreground/70 text-center">
+          {translation ? copyrights[translation] : copyrights.csb}
+        </p>
       </div>
     </footer>
   );

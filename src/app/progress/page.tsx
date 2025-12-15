@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Flame, Trophy, Target, Calendar, CheckCircle, Circle, LogOut, ArrowLeft } from "lucide-react";
+import { Flame, Trophy, Target, Calendar, CheckCircle, Circle, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +77,6 @@ function CircularProgress({ value, size = 120, strokeWidth = 10 }: { value: numb
 }
 
 export default function ProgressPage() {
-  const router = useRouter();
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
@@ -97,11 +96,6 @@ export default function ProgressPage() {
       return () => clearTimeout(timer);
     }
   }, [progress]);
-
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  };
 
   const fetchProgress = async () => {
     try {
@@ -314,17 +308,6 @@ export default function ProgressPage() {
           </Button>
         </motion.div>
 
-        <motion.div variants={itemVariants}>
-          <Button
-            onClick={handleLogout}
-            variant="ghost"
-            className="w-full text-muted-foreground"
-            size="lg"
-          >
-            <LogOut className="size-4" />
-            Forget Me
-          </Button>
-        </motion.div>
       </motion.div>
     </main>
   );
